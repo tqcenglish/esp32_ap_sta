@@ -8,6 +8,7 @@
 */
 #include <string.h>
 #include <fcntl.h>
+#include "nvs_flash.h"
 #include "esp_http_server.h"
 #include "esp_system.h"
 #include "esp_log.h"
@@ -35,6 +36,9 @@ typedef struct rest_server_context {
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
 
+/* 定义一个NVS操作句柄 */
+nvs_handle wificfg_nvs_handler;
+
 /* Set HTTP response content type according to file extension */
 static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filepath)
 {
@@ -55,11 +59,10 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filepa
     return httpd_resp_set_type(req, type);
 }
 
-/* Send HTTP response with the contents of the requested file */
+/* 静态文件处理 */
 static esp_err_t rest_common_get_handler(httpd_req_t *req)
 {
     char filepath[FILE_PATH_MAX];
-
     rest_server_context_t *rest_context = (rest_server_context_t *)req->user_ctx;
     strlcpy(filepath, rest_context->base_path, sizeof(filepath));
     if (req->uri[strlen(req->uri) - 1] == '/') {
@@ -105,9 +108,10 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Simple handler for light brightness control */
-static esp_err_t light_brightness_post_handler(httpd_req_t *req)
+/* 配置网络 */
+static esp_err_t wifi_config_post_handler(httpd_req_t *req)
 {
+    ESP_LOGI(REST_TAG, "call wifi_config_post_handler");
     int total_len = req->content_len;
     int cur_len = 0;
     char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
@@ -129,24 +133,44 @@ static esp_err_t light_brightness_post_handler(httpd_req_t *req)
     buf[total_len] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
-    int red = cJSON_GetObjectItem(root, "red")->valueint;
-    int green = cJSON_GetObjectItem(root, "green")->valueint;
-    int blue = cJSON_GetObjectItem(root, "blue")->valueint;
-    ESP_LOGI(REST_TAG, "Light control: red = %d, green = %d, blue = %d", red, green, blue);
+    cJSON  *ssid = cJSON_GetObjectItem(root, "ssid");
+    cJSON  *passwd = cJSON_GetObjectItem(root, "passwd");
+    ESP_LOGI(REST_TAG, "wifi config:  ssid = %s, passwd = %s", ssid->valuestring, passwd->valuestring);
+
+    /* 打开一个NVS命名空间 */
+    ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &wificfg_nvs_handler) );
+    ESP_ERROR_CHECK( nvs_set_str(wificfg_nvs_handler,"wifi_ssid",ssid->valuestring) );
+    ESP_ERROR_CHECK( nvs_set_str(wificfg_nvs_handler,"wifi_passwd",passwd->valuestring));
+    ESP_ERROR_CHECK( nvs_commit(wificfg_nvs_handler) ); /* 提交 */
+    nvs_close(wificfg_nvs_handler);                     /* 关闭 */  
+    
     cJSON_Delete(root);
     httpd_resp_sendstr(req, "Post control value successfully");
     return ESP_OK;
 }
 
-/* Simple handler for getting system handler */
-static esp_err_t system_info_get_handler(httpd_req_t *req)
+/* 获取网络配置 */
+static esp_err_t wifi_info_get_handler(httpd_req_t *req)
 {
+     /* 打开一个NVS命名空间 */
+    nvs_handle wificfg_nvs_handler; /* 定义一个NVS操作句柄 */
+    char wifi_ssid[32] = { 0 };     /* 定义一个数组用来存储ssid*/
+    char wifi_passwd[64] = { 0 };   /* 定义一个数组用来存储passwd */ 
+    size_t len;
+    /* 打开一个NVS命名空间 */
+    ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &wificfg_nvs_handler) );
+    len = sizeof(wifi_ssid);    /* 从NVS中获取ssid */
+    ESP_ERROR_CHECK( nvs_get_str(wificfg_nvs_handler,"wifi_ssid",wifi_ssid,&len) );
+    len = sizeof(wifi_passwd);      /* 从NVS中获取ssid */
+    ESP_ERROR_CHECK( nvs_get_str(wificfg_nvs_handler,"wifi_passwd",wifi_passwd,&len) );
+    ESP_ERROR_CHECK( nvs_commit(wificfg_nvs_handler) ); /* 提交 */
+    nvs_close(wificfg_nvs_handler);                     /* 关闭 */
+
     httpd_resp_set_type(req, "application/json");
     cJSON *root = cJSON_CreateObject();
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    cJSON_AddStringToObject(root, "version", IDF_VER);
-    cJSON_AddNumberToObject(root, "cores", chip_info.cores);
+    cJSON_AddStringToObject(root, "ssid", wifi_ssid);
+    cJSON_AddStringToObject(root, "passwd", wifi_passwd);
+    
     const char *sys_info = cJSON_Print(root);
     httpd_resp_sendstr(req, sys_info);
     free((void *)sys_info);
@@ -154,19 +178,8 @@ static esp_err_t system_info_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Simple handler for getting temperature data */
-static esp_err_t temperature_data_get_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "application/json");
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "raw", esp_random() % 20);
-    const char *sys_info = cJSON_Print(root);
-    httpd_resp_sendstr(req, sys_info);
-    free((void *)sys_info);
-    cJSON_Delete(root);
-    return ESP_OK;
-}
 
+/*开启 http server*/
 esp_err_t start_rest_server(const char *base_path)
 {
     REST_CHECK(base_path, "wrong base path", err);
@@ -181,32 +194,24 @@ esp_err_t start_rest_server(const char *base_path)
     ESP_LOGI(REST_TAG, "Starting HTTP Server");
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
 
-    /* URI handler for fetching system info */
-    httpd_uri_t system_info_get_uri = {
-        .uri = "/api/v1/system/info",
+    /* 获取网络信息 */
+    httpd_uri_t wifi_info_get_uri = {
+        .uri = "/api/wifi/info",
         .method = HTTP_GET,
-        .handler = system_info_get_handler,
+        .handler = wifi_info_get_handler,
         .user_ctx = rest_context
     };
-    httpd_register_uri_handler(server, &system_info_get_uri);
+    httpd_register_uri_handler(server, &wifi_info_get_uri);
 
-    /* URI handler for fetching temperature data */
-    httpd_uri_t temperature_data_get_uri = {
-        .uri = "/api/v1/temp/raw",
-        .method = HTTP_GET,
-        .handler = temperature_data_get_handler,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &temperature_data_get_uri);
-
-    /* URI handler for light brightness control */
-    httpd_uri_t light_brightness_post_uri = {
-        .uri = "/api/v1/light/brightness",
+    /* 配置Wi-Fi连接 */
+    httpd_uri_t wifi_config_post_uri = {
+        .uri = "/api/wifi/config",
         .method = HTTP_POST,
-        .handler = light_brightness_post_handler,
+        .handler = wifi_config_post_handler,
         .user_ctx = rest_context
     };
-    httpd_register_uri_handler(server, &light_brightness_post_uri);
+    httpd_register_uri_handler(server, &wifi_config_post_uri);
+
 
     /* URI handler for getting web server files */
     httpd_uri_t common_get_uri = {

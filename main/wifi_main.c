@@ -153,11 +153,8 @@ void wifi_init_softap(void)
    
 }
 
-void start(void){
-    //ESP_ERROR_CHECK(esp_wifi_start());
-
+void start_wifi(void){
     ESP_ERROR_CHECK(esp_wifi_start() );
-
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 
     /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
@@ -257,6 +254,7 @@ int init_fs(void)
     }
     return ESP_OK;
 }
+
 // 主函数
 void app_main(void)
 {
@@ -268,6 +266,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    // wifi init
     wifi_init();
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
@@ -276,7 +275,7 @@ void app_main(void)
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
 
-    start();
+    start_wifi();
 
     //rest server
     ESP_ERROR_CHECK(init_fs());
