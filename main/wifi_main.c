@@ -43,14 +43,17 @@ static int s_retry_num = 0;
 #define APP_MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
 
 // STA 模式下 wifi 连接
-#define ESP_WIFI_SSID      "Redmi_5881"
-#define ESP_WIFI_PASS      "tqcenglish"
 #define ESP_MAXIMUM_RETRY  10
+
+// wifi 配置
+char ssid[32] = {0};
+char passwd[64] = {0};
 
 // log tag
 static const char *TAG = "wifi AP Stat";
 
 esp_err_t start_rest_server(const char *base_path);
+void nvs_get(char *key, char* value);
 
 void setApDhcpInfo()
 {   
@@ -169,10 +172,10 @@ void start_wifi(void){
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
-                 ESP_WIFI_SSID, ESP_WIFI_PASS);
+                 ssid, passwd);
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
-                 ESP_WIFI_SSID, ESP_WIFI_PASS);
+                 ssid, passwd);
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
@@ -204,21 +207,26 @@ void wifi_init_sta(void)
                                                         NULL,
                                                         &instance_got_ip));
 
+
+    nvs_get("wifi_ssid", ssid);
+    nvs_get("wifi_passwd", passwd);
+    ESP_LOGI(TAG, "ssid %s paddwd %s", ssid, passwd);
+
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = ESP_WIFI_SSID,
-            .password = ESP_WIFI_PASS,
-            /* Setting a password implies station will connect to all security modes including WEP/WPA.
-             * However these modes are deprecated and not advisable to be used. Incase your Access point
-             * doesn't support WPA2, these mode can be enabled by commenting below line */
-	     .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-
+            //.ssid = ssid,
+            //.password = passwd,
+	        .threshold.authmode = WIFI_AUTH_WPA2_PSK,
             .pmf_cfg = {
                 .capable = true,
                 .required = false
             },
         },
     };
+    //bzero(&wifi_config, sizeof(wifi_config_t)); /* 将结构体数据清零 */
+    memcpy(wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+    memcpy(wifi_config.sta.password, passwd, sizeof(wifi_config.sta.password));
+
     // ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     
@@ -255,6 +263,16 @@ int init_fs(void)
     return ESP_OK;
 }
 
+void restart_wifi(void) {
+    // wifi init
+    wifi_init();
+    ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
+    wifi_init_softap();
+    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+    wifi_init_sta();
+    start_wifi();
+
+}
 // 主函数
 void app_main(void)
 {
@@ -266,16 +284,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    // wifi init
-    wifi_init();
-
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
-    wifi_init_softap();
-
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
-    wifi_init_sta();
-
-    start_wifi();
+    restart_wifi();
 
     //rest server
     ESP_ERROR_CHECK(init_fs());

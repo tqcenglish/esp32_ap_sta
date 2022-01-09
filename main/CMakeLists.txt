@@ -1,5 +1,7 @@
-idf_component_register(SRCS "wifi_main.c"
-                            "rest_server.c"
+idf_component_register(SRCS 
+                        "nvs.c"
+                        "wifi_main.c"
+                        "rest_server.c"
                     INCLUDE_DIRS ".")
 
 set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")

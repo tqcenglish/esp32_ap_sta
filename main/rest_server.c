@@ -36,10 +36,15 @@ typedef struct rest_server_context {
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
 
+void nvs_get(char *key, char* value, size_t len);
+void nvs_set(char *key, char* value);
+void wifi_init_sta(void);
+void restart_wifi(void);
+
 /* 定义一个NVS操作句柄 */
 nvs_handle wificfg_nvs_handler;
 
-/* Set HTTP response content type according to file extension */
+/* 通过文件扩展设置反应类型 */
 static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filepath)
 {
     const char *type = "text/plain";
@@ -137,34 +142,24 @@ static esp_err_t wifi_config_post_handler(httpd_req_t *req)
     cJSON  *passwd = cJSON_GetObjectItem(root, "passwd");
     ESP_LOGI(REST_TAG, "wifi config:  ssid = %s, passwd = %s", ssid->valuestring, passwd->valuestring);
 
-    /* 打开一个NVS命名空间 */
-    ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &wificfg_nvs_handler) );
-    ESP_ERROR_CHECK( nvs_set_str(wificfg_nvs_handler,"wifi_ssid",ssid->valuestring) );
-    ESP_ERROR_CHECK( nvs_set_str(wificfg_nvs_handler,"wifi_passwd",passwd->valuestring));
-    ESP_ERROR_CHECK( nvs_commit(wificfg_nvs_handler) ); /* 提交 */
-    nvs_close(wificfg_nvs_handler);                     /* 关闭 */  
+    nvs_set("wifi_ssid", ssid->valuestring);
+    nvs_set("wifi_passwd", passwd->valuestring);
     
+    // 重新连接 wifi
+    restart_wifi();
+
     cJSON_Delete(root);
-    httpd_resp_sendstr(req, "Post control value successfully");
+    httpd_resp_sendstr(req, "Post successfully");
     return ESP_OK;
 }
 
 /* 获取网络配置 */
 static esp_err_t wifi_info_get_handler(httpd_req_t *req)
 {
-     /* 打开一个NVS命名空间 */
-    nvs_handle wificfg_nvs_handler; /* 定义一个NVS操作句柄 */
     char wifi_ssid[32] = { 0 };     /* 定义一个数组用来存储ssid*/
     char wifi_passwd[64] = { 0 };   /* 定义一个数组用来存储passwd */ 
-    size_t len;
-    /* 打开一个NVS命名空间 */
-    ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &wificfg_nvs_handler) );
-    len = sizeof(wifi_ssid);    /* 从NVS中获取ssid */
-    ESP_ERROR_CHECK( nvs_get_str(wificfg_nvs_handler,"wifi_ssid",wifi_ssid,&len) );
-    len = sizeof(wifi_passwd);      /* 从NVS中获取ssid */
-    ESP_ERROR_CHECK( nvs_get_str(wificfg_nvs_handler,"wifi_passwd",wifi_passwd,&len) );
-    ESP_ERROR_CHECK( nvs_commit(wificfg_nvs_handler) ); /* 提交 */
-    nvs_close(wificfg_nvs_handler);                     /* 关闭 */
+    nvs_get("wifi_ssid", wifi_ssid, sizeof(wifi_ssid));
+    nvs_get("wifi_passwd", wifi_passwd, sizeof(wifi_passwd));
 
     httpd_resp_set_type(req, "application/json");
     cJSON *root = cJSON_CreateObject();

@@ -1,16 +1,21 @@
 #include "nvs_flash.h"
+#include "esp_log.h"
 
-static char* nvs_get(char *key){
-	/* 定义一个NVS操作句柄 */
-    nvs_handle wificfg_nvs_handler; 
-	/* 定义一个数组用来存储*/
-    char value[32] = { 0 };     
-    size_t len;
-    /* 打开一个NVS命名空间 */
-    ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &wificfg_nvs_handler) );
-    len = sizeof(value);    /* 从NVS中获取ssid */
-    ESP_ERROR_CHECK( nvs_get_str(wificfg_nvs_handler,key,value,&len) );
-    ESP_ERROR_CHECK( nvs_commit(wificfg_nvs_handler) ); /* 提交 */
-    nvs_close(wificfg_nvs_handler);                     /* 关闭 */
-	return &value
+void nvs_get(char *key, char* value, size_t len){
+    // size_t len = sizeof(&value); 通过这个方式不能获取数组真实长度
+    nvs_handle nvs_handler; 
+    ESP_LOGI("nvs", "get nvs key = %s, buflength = %d ", key, len);
+    ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &nvs_handler) );
+    ESP_ERROR_CHECK( nvs_get_str(nvs_handler,key,value,&len) );
+    ESP_ERROR_CHECK( nvs_commit(nvs_handler) ); /* 提交 */
+    nvs_close(nvs_handler);                     /* 关闭 */
+}
+
+void nvs_set(char *key, char* value){
+    nvs_handle nvs_handler; 
+    ESP_LOGI("nvs", "set nvs key = %s, value = %s", key, value);
+    ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &nvs_handler) );
+    ESP_ERROR_CHECK( nvs_set_str(nvs_handler,key,value) );
+    ESP_ERROR_CHECK( nvs_commit(nvs_handler) ); /* 提交 */
+    nvs_close(nvs_handler);                     /* 关闭 */
 }

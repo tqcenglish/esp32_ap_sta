@@ -66,7 +66,7 @@ export default {
       });
     },
     updateWifi(){
-      updateWifi().then(res => {
+      updateWifi(this.formData).then(res => {
         console.log(res);
       })
     },
