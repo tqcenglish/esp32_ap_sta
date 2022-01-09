@@ -156,15 +156,26 @@ static esp_err_t wifi_config_post_handler(httpd_req_t *req)
 /* 获取网络配置 */
 static esp_err_t wifi_info_get_handler(httpd_req_t *req)
 {
-    char wifi_ssid[32] = { 0 };     /* 定义一个数组用来存储ssid*/
-    char wifi_passwd[64] = { 0 };   /* 定义一个数组用来存储passwd */ 
+    char wifi_ssid[32] = { 0 };     
+    char wifi_passwd[64] = { 0 }; 
+    char wifi_ip[32] = { 0 };     
+    char wifi_gw[64] = { 0 }; 
+    char wifi_netmask[64] = {0};
+
     nvs_get("wifi_ssid", wifi_ssid, sizeof(wifi_ssid));
     nvs_get("wifi_passwd", wifi_passwd, sizeof(wifi_passwd));
+    nvs_get("wifi_sta_ip", wifi_ip, sizeof(wifi_passwd));
+    nvs_get("wifi_sta_gw", wifi_gw, sizeof(wifi_passwd));
+    nvs_get("wifi_sta_mask", wifi_netmask, sizeof(wifi_passwd));
 
     httpd_resp_set_type(req, "application/json");
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "ssid", wifi_ssid);
     cJSON_AddStringToObject(root, "passwd", wifi_passwd);
+    cJSON_AddStringToObject(root, "ip", wifi_ip);
+    cJSON_AddStringToObject(root, "gw", wifi_gw);
+    cJSON_AddStringToObject(root, "netmask", wifi_netmask);
+
     
     const char *sys_info = cJSON_Print(root);
     httpd_resp_sendstr(req, sys_info);

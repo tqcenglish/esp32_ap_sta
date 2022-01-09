@@ -1,11 +1,3 @@
-/*  WiFi softAP Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -36,9 +28,9 @@ static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 
 
-// AP 模式下 wifi 配置
-#define AP_ESP_WIFI_SSID      "esp32AP"//CONFIG_ESP_WIFI_SSID
-#define AP_ESP_WIFI_PASS      "abcdabcd"//CONFIG_ESP_WIFI_PASSWORD
+// AP 模式下 wifi 配置, 无密码模式
+#define AP_ESP_WIFI_SSID      "esp32AP"
+#define AP_ESP_WIFI_PASS      ""
 #define APP_ESP_WIFI_CHANNEL   CONFIG_ESP_WIFI_CHANNEL
 #define APP_MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
 
@@ -50,29 +42,11 @@ char ssid[32] = {0};
 char passwd[64] = {0};
 
 // log tag
-static const char *TAG = "wifi AP Stat";
+static const char *TAG = "wifi Stat";
 
 esp_err_t start_rest_server(const char *base_path);
 void nvs_get(char *key, char* value);
-
-void setApDhcpInfo()
-{   
-	tcpip_adapter_ip_info_t  apNetConfInfo  = {0};
-	//初始化网络和DHCP有关内存，必须要提前执行这个API 不然下面操作直接让设备重启
-	// tcpip_adapter_init();  
-	// 将AP模式的DHCP 模式先关闭
-	tcpip_adapter_dhcps_stop ( TCPIP_ADAPTER_IF_AP );
-	//将对应的地址转成对应的字节序， 要注意apNetConfInf成员是结构体嵌套结构体，才是数组
-	//
-	IP4_ADDR( &apNetConfInfo.ip      , 192 , 168 , 32   , 1);  //设置IP
-	IP4_ADDR( &apNetConfInfo.gw      , 192 , 168 , 32   , 1);  //设置网关
-	IP4_ADDR( &apNetConfInfo.netmask , 255 , 255 , 255 , 0);  //设置子网掩码
-	
-	tcpip_adapter_set_ip_info( TCPIP_ADAPTER_IF_AP , &apNetConfInfo ); //设置IP信息
-	
-	tcpip_adapter_dhcps_stop(  TCPIP_ADAPTER_IF_AP ); //重新启动AP模式 DHCP 
-}
-
+void nvs_set(char *key, char* value);
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                     int32_t event_id, void* event_data)
@@ -105,6 +79,16 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+
+        // 写入 nvs
+        char value[32];
+        sprintf(value, IPSTR, IP2STR(&event->ip_info.ip));
+        nvs_set("wifi_sta_ip", value );
+        sprintf(value, IPSTR, IP2STR(&event->ip_info.gw));
+        nvs_set("wifi_sta_gw", value);
+        sprintf(value, IPSTR, IP2STR(&event->ip_info.netmask));
+        nvs_set("wifi_sta_mask", value);
+
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
@@ -124,13 +108,9 @@ void wifi_init(void){
 
     //两种模式 WIFI
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA) );
-
-
 }
 
-void wifi_init_softap(void)
-{
-    
+void wifi_init_softap(void){
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                                                         ESP_EVENT_ANY_ID,
                                                         &wifi_event_handler,
@@ -263,13 +243,16 @@ int init_fs(void)
     return ESP_OK;
 }
 
+/*重启 wifi*/
 void restart_wifi(void) {
-    // wifi init
     wifi_init();
+    
     ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
     wifi_init_softap();
+
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
+    
     start_wifi();
 
 }
