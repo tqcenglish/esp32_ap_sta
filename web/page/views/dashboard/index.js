@@ -30,7 +30,11 @@ export default {
 
       <el-col :span="11">
         <el-form :label-position="'left'" label-width="100px" :model="networkData">
-            <el-form-item><h2>网络信息</h2> </el-form-item>
+            <el-form-item><h2>
+              网络信息 
+                <span v-if='!networkData.ip' style="color:red;">连接失败</span>
+                <span v-if='networkData.ip' style="color:green;">连接成功</span>
+              </h2> </el-form-item>
             <el-form-item label="IP">
               <el-input v-model="networkData.ip"></el-input>
             </el-form-item>
@@ -99,7 +103,6 @@ export default {
           this.updateFormData = false;
         }
 
-
         this.networkData.ip = res.ip;
         this.networkData.gw = res.gw;
         this.networkData.netmask = res.netmask;
@@ -108,6 +111,9 @@ export default {
     updateWifi(){
       updateWifi(this.formData).then(res => {
         console.log(res);
+        this.$message.info("更新成功");
+      }).catch(() => {
+        this.$message.info("更新成功");
       })
     },
     updateNetwork(){
