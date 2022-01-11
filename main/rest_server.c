@@ -140,10 +140,12 @@ static esp_err_t wifi_config_post_handler(httpd_req_t *req)
     cJSON *root = cJSON_Parse(buf);
     cJSON  *ssid = cJSON_GetObjectItem(root, "ssid");
     cJSON  *passwd = cJSON_GetObjectItem(root, "passwd");
+    cJSON  *serial = cJSON_GetObjectItem(root, "serial");
     ESP_LOGI(REST_TAG, "wifi config:  ssid = %s, passwd = %s", ssid->valuestring, passwd->valuestring);
 
     nvs_set("wifi_ssid", ssid->valuestring);
     nvs_set("wifi_passwd", passwd->valuestring);
+    nvs_set("serial", serial->valuestring);
     
     // 重新连接 wifi
     restart_wifi();
@@ -158,23 +160,31 @@ static esp_err_t wifi_info_get_handler(httpd_req_t *req)
 {
     char wifi_ssid[32] = { 0 };     
     char wifi_passwd[64] = { 0 }; 
+    char serial[64] = { 0 }; 
+
     char wifi_ip[32] = { 0 };     
     char wifi_gw[64] = { 0 }; 
     char wifi_netmask[64] = {0};
+    char wifi_sta_mac[32] = {0};
 
     nvs_get("wifi_ssid", wifi_ssid, sizeof(wifi_ssid));
     nvs_get("wifi_passwd", wifi_passwd, sizeof(wifi_passwd));
+    nvs_get("serial", serial, sizeof(serial));
+
     nvs_get("wifi_sta_ip", wifi_ip, sizeof(wifi_passwd));
     nvs_get("wifi_sta_gw", wifi_gw, sizeof(wifi_passwd));
     nvs_get("wifi_sta_mask", wifi_netmask, sizeof(wifi_passwd));
+    nvs_get("wifi_sta_mac", wifi_sta_mac, sizeof(wifi_sta_mac));
 
     httpd_resp_set_type(req, "application/json");
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "ssid", wifi_ssid);
     cJSON_AddStringToObject(root, "passwd", wifi_passwd);
+    cJSON_AddStringToObject(root, "serial", serial);
     cJSON_AddStringToObject(root, "ip", wifi_ip);
     cJSON_AddStringToObject(root, "gw", wifi_gw);
     cJSON_AddStringToObject(root, "netmask", wifi_netmask);
+    cJSON_AddStringToObject(root, "mac", wifi_sta_mac);
 
     
     const char *sys_info = cJSON_Print(root);

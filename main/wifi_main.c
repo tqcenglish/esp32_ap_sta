@@ -13,12 +13,19 @@
 
 #include "sdkconfig.h"
 #include "driver/gpio.h"
+
 #include "esp_vfs_semihost.h"
 #include "esp_vfs_fat.h"
 #include "esp_spiffs.h"
 #include "sdmmc_cmd.h"
 #include "esp_netif.h"
 #include "lwip/apps/netbiosns.h"
+
+#include "esp_tls.h"
+#include "esp_http_client.h"
+
+void BSP_init(void);//硬件初始化
+
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
 
@@ -29,7 +36,7 @@ static int s_retry_num = 0;
 
 
 // AP 模式下 wifi 配置, 无密码模式
-#define AP_ESP_WIFI_SSID      "esp32AP"
+#define AP_ESP_WIFI_SSID      "Howseen_CallBox_Cfg"
 #define AP_ESP_WIFI_PASS      ""
 #define APP_ESP_WIFI_CHANNEL   CONFIG_ESP_WIFI_CHANNEL
 #define APP_MAX_STA_CONN       CONFIG_ESP_MAX_STA_CONN
@@ -72,8 +79,11 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "retry to connect to the AP");
-        } else {
-            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        } 
+        else 
+        {
+            //xTaskCreate(touchpad_read_task, "touchpad_read_task", 2048, NULL, 5, NULL);//创建触摸检测任务，检测是否进入AP配置模式
+            //xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
         ESP_LOGI(TAG,"connect to the AP fail");
 
@@ -94,6 +104,17 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         nvs_set("wifi_sta_gw", value);
         sprintf(value, IPSTR, IP2STR(&event->ip_info.netmask));
         nvs_set("wifi_sta_mask", value);
+
+        //　获取 mac 地址
+        uint8_t derived_mac_addr[6] = {0};
+        //Get MAC address for WiFi Station interface
+        ESP_ERROR_CHECK(esp_read_mac(derived_mac_addr, ESP_MAC_WIFI_STA));
+        char mac[18];
+        sprintf(mac, "%x:%x:%x:%x:%x:%x",
+             derived_mac_addr[0], derived_mac_addr[1], derived_mac_addr[2],
+             derived_mac_addr[3], derived_mac_addr[4], derived_mac_addr[5]);
+        ESP_LOGI(TAG, "mac %s", mac);
+        nvs_set("wifi_sta_mac", mac);
 
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -262,9 +283,12 @@ void restart_wifi(void) {
     start_wifi();
 
 }
+
 // 主函数
 void app_main(void)
 {
+    //BSP_init();
+    
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -274,7 +298,6 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     restart_wifi();
-
     //rest server
     ESP_ERROR_CHECK(init_fs());
     ESP_ERROR_CHECK(start_rest_server("/www"));

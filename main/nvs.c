@@ -6,7 +6,9 @@ void nvs_get(char *key, char* value, size_t len){
     nvs_handle nvs_handler; 
     ESP_LOGI("nvs", "get nvs key = %s, buflength = %d ", key, len);
     ESP_ERROR_CHECK( nvs_open("WiFi_cfg", NVS_READWRITE, &nvs_handler) );
-    ESP_ERROR_CHECK( nvs_get_str(nvs_handler,key,value,&len) );
+    // 可能不存在 key
+    // ESP_ERROR_CHECK( nvs_get_str(nvs_handler,key,value,&len) );
+    nvs_get_str(nvs_handler,key,value,&len);
     ESP_ERROR_CHECK( nvs_commit(nvs_handler) ); /* 提交 */
     nvs_close(nvs_handler);                     /* 关闭 */
 }
